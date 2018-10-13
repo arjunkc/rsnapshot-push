@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # Takes arguments.
-#   1.  hostname to backup. Checks if directory exists inside /mnt/Backup/snapshots. Creates it otherwise. Creates a .sync directory too.
-#   2.  Checks if the rsyncd.conf exists. If not, it creates it on the fly using a template from /etc/rsnapshot/rsyncd.conf.template It uses the first argument to create the correct paths
+#   1.  hostname to backup. Checks if directory exists inside ${BACKUPROOT}snapshots. Creates it otherwise. Creates a .sync directory too.
+#   2.  Checks if the rsyncd.conf exists. If not, it creates it on the fly using a template from ${INSTALLDIR}/rsyncd.conf.template It uses the first argument to create the correct paths
 #   3.  sync or rotate. If sync, run rsync. If not, it runs rsnapshot rotate. The rsnapshot rotate command fails, then there is a possibility that the rotate fails. If rsnapshot fails a rotate because, the refining-linux script advocates a check. But I think rsnapshot has this safety built in. If rotate, it will run the third rotate command. This allows you to set rotation from the client side with little effort.
 
 DEBUG=0
-LOGFILE="/mnt/Backup/rsnapshot-push.log"
+BACKUPROOT="/mnt/Backup"
+INSTALLDIR="/etc/rsnapshot"
+LOGFILE=${BACKUPROOT}"rsnapshot-push.log"
 
 function Usage() {
     echo "Usage:"
@@ -54,9 +56,9 @@ while getopts ":b:sr:c:vh" opt; do
     esac
 done
 
-# Check if directory exists in /mnt/Backup/snapshots
+# Check if directory exists in ${BACKUPDIR}/snapshots
 
-backupdir="/mnt/Backup/snapshots/"${BACKUPNAME}
+backupdir="${BACKUPROOT}/snapshots/"${BACKUPNAME}
 syncdir=$backupdir"/.sync"
 lockfile=$backupdir"/rsyncd.lock"
 logfile=$backupdir"/rsyncd.log"
@@ -74,7 +76,7 @@ then
     echo "Creating backup directory for " $backupdir >> $LOGFILE
 
     # Make rsyncd config
-    cp /etc/rsnapshot/rsyncd.conf.template $rsyncdconf
+    cp "$INSTALLDIR"/rsyncd.conf.template $rsyncdconf
     # replace push and pull paths
     # matches particular range of line numbers, according the template
     sed -i -e "s#path\s*=#path = ${backupdir}#" $rsyncdconf
@@ -88,7 +90,7 @@ then
     sed -i -e "s#log file.*#log file = ${logfile}#" $rsyncdconf
 
     # Make rsnapshot config
-    cp /etc/rsnapshot/rsnapshot-push.conf.template $rsnapshotconf
+    cp "$INSTALLDIR"/rsnapshot-push.conf.template $rsnapshotconf
     sed -i -e "s#snapshot_root.*#snapshot_root\t${backupdir}#" $rsnapshotconf
     sed -i -e "s#logfile.*#logfile\t${backupdir}/rsnapshot.log#" $rsnapshotconf
     sed -i -e "s#lockfile.*#lockfile\t${backupdir}/rsnapshot.pid#" $rsnapshotconf
