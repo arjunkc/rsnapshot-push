@@ -1,0 +1,21 @@
+port = 8730
+
+[push]
+uid = backup
+path = 
+use chroot = 0
+read only = 0
+write only = 1
+fake super = 1
+max connections = 1
+lock file = 
+log file = 
+post-xfer exec = 
+
+[pull]
+#uid = backup
+path = 
+use chroot = 0
+read only = 1
+fake super = 1
+

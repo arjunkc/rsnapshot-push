@@ -1,0 +1,28 @@
+# include directive
+
+config_version	1.2
+
+cmd_cp	/bin/cp
+cmd_rm	/bin/rm
+cmd_rsync	/usr/bin/rsync
+cmd_logger	/usr/bin/logger
+
+retain	push	4
+#retain	weekly	4
+retain	monthly	12
+retain	yearly	4
+
+verbose	2
+loglevel	3
+one_fs	1
+sync_first	1
+link_dest	1
+
+snapshot_root	pathtoroot
+logfile	pathtolog
+lockfile	pathtolockfile
+
+rsync_short_args	-aAxXv
+rsync_long_args	--delete --numeric-ids --delete-excluded --log-file=/var/log/rsync.log
+
+backup	pathtoroot	./

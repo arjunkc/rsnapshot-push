@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Takes arguments.
+#   1.  hostname to backup. Checks if directory exists inside /mnt/Backup/snapshots. Creates it otherwise. Creates a .sync directory too.
+#   2.  Checks if the rsyncd.conf exists. If not, it creates it on the fly using a template from /etc/rsnapshot/rsyncd.conf.template It uses the first argument to create the correct paths
+#   3.  sync or rotate. If sync, run rsync. If not, it runs rsnapshot rotate. The rsnapshot rotate command fails, then there is a possibility that the rotate fails. If rsnapshot fails a rotate because, the refining-linux script advocates a check. But I think rsnapshot has this safety built in. If rotate, it will run the third rotate command. This allows you to set rotation from the client side with little effort.
+
+DEBUG=0
+LOGFILE="/mnt/Backup/rsnapshot-push.log"
+
+function Usage() {
+    echo "Usage:"
+    echo -e "\trsnapshot-push <options>"
+    echo -e "Options:"
+    echo -e "\t-b <backup name>\t\t Must have a -b option. Sets the backupname "
+    echo -e "\t-s\t\t Runs in sync mode."
+    echo -e "\t-r <ROTATION NAME>\t Run rsnapshot in rotation mode."
+    echo -e "\t-v\t Verbose. Show debugging information"
+    echo -e "\t-h\t\t Display this help"
+}
+
+while getopts ":b:sr:c:vh" opt; do
+    case "$opt" in
+        b)
+            BACKUPNAME="$OPTARG"
+            ;;
+        s)
+            #run rsync in sync mode
+            # Once the sync is done, it should also run push
+            SYNC=1
+            ;;
+        r)  
+            ROTATE="$OPTARG"
+            ;;
+        v)
+            DEBUG=1
+            ;;
+        h) 
+            Usage
+            exit 0
+            ;;
+        ?)
+            if [ "$OPTARG" == "b" ]; then
+                BACKUPNAME="error"
+            elif [ "$OPTARG" == "r" ]; then
+                # I might want to do something fancy here
+                Usage
+                exit 0
+            else 
+                Usage
+                exit 0
+            fi
+            ;;
+    esac
+done
+
+# Check if directory exists in /mnt/Backup/snapshots
+
+backupdir="/mnt/Backup/snapshots/"${BACKUPNAME}
+syncdir=$backupdir"/.sync"
+lockfile=$backupdir"/rsyncd.lock"
+logfile=$backupdir"/rsyncd.log"
+rsyncdconf=$backupdir"/rsyncd.conf"
+rsnapshotconf=$backupdir"/rsnapshot.conf"
+postxfercmd="/usr/local/bin/rsnapshot-push -b $BACKUPNAME -r push"
+
+if [[ ! -e $backupdir ]]; 
+then
+    mkdir -p $backupdir    
+    mkdir -p $syncdir
+    if [[ $DEBUG -eq 1 ]]; then
+        echo "Creating backup directory for " $backupdir >> $LOGFILE
+    fi
+    echo "Creating backup directory for " $backupdir >> $LOGFILE
+
+    # Make rsyncd config
+    cp /etc/rsnapshot/rsyncd.conf.template $rsyncdconf
+    # replace push and pull paths
+    # matches particular range of line numbers, according the template
+    sed -i -e "s#path\s*=#path = ${backupdir}#" $rsyncdconf
+    # to be replaced with a perl -pi.bak 's ... m' multiline command
+    #sed -i -e "11,\$s#path\s*=#path = ${backupdir}#" $rsyncdconf
+
+    # write correct post-xfer file
+    sed -i -e "s#post-xfer exec.*#post-xfer exec = ${postxfercmd}#" $rsyncdconf
+    # lock file
+    sed -i -e "s#lock file.*#lock file = ${lockfile}#" $rsyncdconf
+    sed -i -e "s#log file.*#log file = ${logfile}#" $rsyncdconf
+
+    # Make rsnapshot config
+    cp /etc/rsnapshot/rsnapshot-push.conf.template $rsnapshotconf
+    sed -i -e "s#snapshot_root.*#snapshot_root\t${backupdir}#" $rsnapshotconf
+    sed -i -e "s#logfile.*#logfile\t${backupdir}/rsnapshot.log#" $rsnapshotconf
+    sed -i -e "s#lockfile.*#lockfile\t${backupdir}/rsnapshot.pid#" $rsnapshotconf
+    sed -i -e "s#backup.*#backup\t${syncdir}\t./#" $rsnapshotconf
+
+    if [[ $DEBUG -eq 1 ]]; then
+        echo -e "\nrsyncd.conf created from template\n" 
+        cat $rsyncdconf 
+        echo -e "\nrsnapshot.conf created from template"
+        cat $rsnapshotconf 
+    fi
+    echo -e "\nrsyncd.conf created from template\n" >> $LOGFILE
+    echo -e "\nrsnapshot.conf created from template" >> $LOGFILE
+fi
+
+if [[ $SYNC -eq 1 ]]; then
+    # will run rsync daemon. The rsync daemon will run the push rotation.
+    # I do not know what the extra $backupdir is for. The --server is necessary.
+    /usr/bin/rsync --server --daemon --config=${rsyncdconf} $backupdir
+    #sudo /usr/bin/rsync --daemon --config=${rsyncdconf} 
+    if [[ $DEBUG -eq 1 ]]; then
+        echo -e "Started rsync with pid" $(pidof rsync) "on $(date)"
+    fi
+    echo -e "Started rsync with pid" $(pidof rsync) >> $LOGFILE
+elif [[ $ROTATE == "push" ]]; then
+    if [[ $RSYNC_EXIT_STATUS -eq 0 ]]; then
+        rsnapshot -c $rsnapshotconf push
+    fi
+elif [[ -n $ROTATE  ]]; then
+    # this one doesn't check the rsync exit status
+    # if rotate is not empty, run rotate
+    rsnapshot -c $rsnapshotconf $ROTATE
+fi

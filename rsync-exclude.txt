@@ -1,0 +1,21 @@
+# GENERAL excludes
+*.swp
+*.tmp
+.cache
+.directory
+Thumbs.db
+desktop.ini
+Desktop.ini
+.DS_Store
+*~
+.dropbox.cache
+.Trash/***
+.Trash-1000/***
+lost+found/***
+.thumbnails
+# System excludes
+/dev/*
+/proc/**
+/sys/*
+/tmp/**
+/lost+found/*
